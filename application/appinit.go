@@ -1,10 +1,7 @@
 package application
 
 import (
-	"fmt"
 	"os"
-	"io/ioutil"
-	"encoding/json"
 	"path/filepath"
 
 	store "../store"
@@ -19,18 +16,8 @@ func (sync *Sync) Initialize() {
 	sync.SettingsFilePath = filepath.Join(homedir, "syncsettings.json")
 
 	var storage store.Storage = store.Storage{}
-
-	fileExists, err := os.Stat(sync.SettingsFilePath)
-	if err != nil {
-		fmt.Println(err)
-	}
-	if fileExists != nil {
-		file, _ := ioutil.ReadFile(sync.SettingsFilePath)
-		json.Unmarshal(file, &storage)
-    } else {
-		fmt.Println("Example file does not exist (or is a directory)")
-    }
+	storage.SettingsPath = sync.SettingsFilePath
 	sync.Storage = &storage
 
-	sync.Storage.Save()
+	sync.Storage.Load()
 }
