@@ -10,49 +10,53 @@ import (
 )
 
 func decrypt(sync *Sync) {
-    workdir := sync.Storage.Settings.WorkPath
-    syncdir := sync.Storage.Settings.SyncPath
-    secret := sync.Storage.Settings.Secret
+	workdir := sync.Storage.Settings.WorkPath
+	syncdir := sync.Storage.Settings.SyncPath
+	secret := sync.Storage.Settings.Secret
 
-    items, _ := ioutil.ReadDir(syncdir)
-    for _, item := range items {
-        if item.IsDir() {
+	items, _ := ioutil.ReadDir(syncdir)
+	for _, item := range items {
+		if item.IsDir() {
 			testpath := filepath.Join(workdir, item.Name())
-			test,_ := os.Stat(testpath)
-			if  test == nil {
+			test, _ := os.Stat(testpath)
+			if test == nil {
 				os.Mkdir(testpath, os.ModePerm)
 			}
-            subitems, _ := ioutil.ReadDir(item.Name())
-            for _, subitem := range subitems {
-                if !subitem.IsDir() {
+			subitems, _ := ioutil.ReadDir(item.Name())
+			for _, subitem := range subitems {
+				if !subitem.IsDir() {
 					oldpath := filepath.Join(syncdir, item.Name())
 					newpath := filepath.Join(testpath, item.Name())
 
-                    decryptFile(oldpath,oldFileName(newpath), secret)
-                }
-            }
-        } else {
+					decryptFile(oldpath, oldFileName(newpath), secret)
+				}
+			}
+		} else {
 
 			oldpath := filepath.Join(syncdir, item.Name())
 			newpath := filepath.Join(workdir, item.Name())
 
-			decryptFile(oldpath,oldFileName(newpath), secret)
-        }
-    }    
+			decryptFile(oldpath, oldFileName(newpath), secret)
+		}
+	}
 }
 
 func oldFileName(oldfilename string) string {
 	ext := path.Ext(oldfilename)
-	outfile := oldfilename[0:len(oldfilename)-len(ext)]
+	outfile := oldfilename[0 : len(oldfilename)-len(ext)-1]
 	return outfile
 }
 
 func decryptFile(infile string, outfile string, secret string) {
-    f, _ := os.Create(outfile)
-    defer f.Close()
-    
+	test, _ := os.Stat(outfile)
+	if test != nil {
+		os.Remove(outfile)
+	}
+	f, _ := os.Create(outfile)
+	defer f.Close()
+
 	data, _ := ioutil.ReadFile(infile)
-    f.Write(decryptData(data, secret))
+	f.Write(decryptData(data, secret))
 }
 
 func decryptData(data []byte, secret string) []byte {

@@ -16,39 +16,43 @@ func crypt(sync *Sync) {
 	syncdir := sync.Storage.Settings.SyncPath
 	secret := sync.Storage.Settings.Secret
 
-    items, _ := ioutil.ReadDir(workdir)
-    for _, item := range items {
-        if item.IsDir() {
+	items, _ := ioutil.ReadDir(workdir)
+	for _, item := range items {
+		if item.IsDir() {
 			testpath := filepath.Join(syncdir, item.Name())
-			test,_ := os.Stat(testpath)
-			if  test == nil {
+			test, _ := os.Stat(testpath)
+			if test == nil {
 				os.Mkdir(testpath, os.ModePerm)
 			}
-            subitems, _ := ioutil.ReadDir(item.Name())
-            for _, subitem := range subitems {
-                if !subitem.IsDir() {
+			subitems, _ := ioutil.ReadDir(item.Name())
+			for _, subitem := range subitems {
+				if !subitem.IsDir() {
 					oldpath := filepath.Join(workdir, item.Name())
 					newpath := filepath.Join(testpath, item.Name())
 
-                    cryptFile(oldpath,newFileName(newpath),secret)
-                }
-            }
-        } else {
+					cryptFile(oldpath, newFileName(newpath), secret)
+				}
+			}
+		} else {
 			oldpath := filepath.Join(workdir, item.Name())
 			newpath := filepath.Join(syncdir, item.Name())
 
-			cryptFile(oldpath,newFileName(newpath),secret)
-        }
-    }
+			cryptFile(oldpath, newFileName(newpath), secret)
+		}
+	}
 }
 
 func newFileName(oldfilename string) string {
 	ext := path.Ext(oldfilename)
-	outfile := oldfilename[0:len(oldfilename)-len(ext)] + ".crypt"
+	outfile := oldfilename[0:len(oldfilename)-len(ext)] + "." + ext + ".crypt"
 	return outfile
 }
 
 func cryptFile(infile string, outfile string, secret string) {
+	test, _ := os.Stat(outfile)
+	if test != nil {
+		os.Remove(outfile)
+	}
 	f, _ := os.Create(outfile)
 	defer f.Close()
 	data, _ := ioutil.ReadFile(infile)
