@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"golang.org/x/crypto/bcrypt"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 
 	settings "../settings"
 )
 
 /*Settings containing everything*/
 type Storage struct {
-	Settings   *settings.Setting
-	SettingsPath   string
+	Settings     *settings.Setting
+	SettingsPath string
 }
 
 /*Load Settings*/
@@ -30,6 +31,13 @@ func (storage *Storage) Load() {
 		file, _ := ioutil.ReadFile(storage.SettingsPath)
 		json.Unmarshal(file, &setting)
 		storage.Settings = &setting
+
+		input := askQuestion("reenter secret for AES encryption")
+		ok := checkHashes(input, storage.Settings.Secret)
+		if !ok {
+			fmt.Println("wrong secret")
+			os.Exit(0)
+		}
 	} else {
 		setting.WorkPath = askQuestion("Path of files to protect")
 		setting.SyncPath = askQuestion("Path to store crypted files (for sync like dropbox)")
@@ -37,6 +45,11 @@ func (storage *Storage) Load() {
 		storage.Settings = &setting
 		storage.Save()
 	}
+}
+
+func checkHashes(input string, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(input))
+	return err == nil
 }
 
 /*Save Settings*/
@@ -53,10 +66,11 @@ func askQuestion(question string) string {
 
 	response := string(readText)
 	response = strings.TrimSuffix(response, "\n")
-	return response
+	filterd := strings.Replace(response, "\r", "", 1)
+	return filterd
 }
 
 func hashPassword(password string) (string, error) {
-    bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-    return string(bytes), err
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
 }
