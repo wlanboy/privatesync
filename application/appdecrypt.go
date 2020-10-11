@@ -3,6 +3,7 @@ package application
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -57,6 +58,7 @@ func decryptFile(infile string, outfile string, secret string) {
 
 	data, _ := ioutil.ReadFile(infile)
 	f.Write(decryptData(data, secret))
+	fmt.Println("*")
 }
 
 func decryptData(data []byte, secret string) []byte {

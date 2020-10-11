@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -57,6 +58,7 @@ func cryptFile(infile string, outfile string, secret string) {
 	defer f.Close()
 	data, _ := ioutil.ReadFile(infile)
 	f.Write(encryptData(data, secret))
+	fmt.Println("*")
 }
 
 func encryptData(data []byte, secret string) []byte {
