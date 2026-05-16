@@ -43,9 +43,9 @@ func decrypt(sync *Sync) {
 }
 
 func oldFileName(oldfilename string) string {
-	ext := path.Ext(oldfilename)
-	outfile := oldfilename[0 : len(oldfilename)-len(ext)-1]
-	return outfile
+	withoutCrypt := oldfilename[:len(oldfilename)-len(".crypt")]
+	innerExt := path.Ext(withoutCrypt)
+	return withoutCrypt[:len(withoutCrypt)-len(innerExt)-1] + innerExt
 }
 
 func decryptFile(infile string, outfile string, secret string) {
