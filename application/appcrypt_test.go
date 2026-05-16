@@ -1,0 +1,88 @@
+package application
+
+import (
+	"bytes"
+	"testing"
+)
+
+func TestNewFileName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"file.txt", "file..txt.crypt"},
+		{"archive.tar.gz", "archive.tar..gz.crypt"},
+		{"document.pdf", "document..pdf.crypt"},
+	}
+	for _, tt := range tests {
+		got := newFileName(tt.input)
+		if got != tt.expected {
+			t.Errorf("newFileName(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestOldFileName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"file..txt.crypt", "file.txt"},
+		{"document..pdf.crypt", "document.pdf"},
+		{"archive.tar..gz.crypt", "archive.tar.gz"},
+	}
+	for _, tt := range tests {
+		got := oldFileName(tt.input)
+		if got != tt.expected {
+			t.Errorf("oldFileName(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestNewOldFileNameRoundtrip(t *testing.T) {
+	inputs := []string{"file.txt", "document.pdf", "archive.tar.gz"}
+	for _, name := range inputs {
+		got := oldFileName(newFileName(name))
+		if got != name {
+			t.Errorf("roundtrip(%q): got %q", name, got)
+		}
+	}
+}
+
+func TestEncryptDecryptRoundtrip(t *testing.T) {
+	secret := "mysecretpassword"
+	original := []byte("Hello, this is test data!")
+
+	encrypted := encryptData(original, secret)
+	if bytes.Equal(encrypted, original) {
+		t.Fatal("encrypted data should differ from original")
+	}
+
+	decrypted := decryptData(encrypted, secret)
+	if !bytes.Equal(decrypted, original) {
+		t.Errorf("roundtrip failed: got %q, want %q", decrypted, original)
+	}
+}
+
+func TestEncryptDifferentSecretFails(t *testing.T) {
+	original := []byte("sensitive data")
+	encrypted := encryptData(original, "correctsecret")
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when decrypting with wrong secret")
+		}
+	}()
+	decryptData(encrypted, "wrongsecret")
+}
+
+func TestEncryptProducesUniqueCiphertext(t *testing.T) {
+	data := []byte("same plaintext")
+	secret := "samesecret"
+
+	c1 := encryptData(data, secret)
+	c2 := encryptData(data, secret)
+	if bytes.Equal(c1, c2) {
+		t.Error("two encryptions of the same plaintext should differ (random nonce)")
+	}
+}
