@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	store "../store"
+	store "github.com/wlanboy/privatesync/store"
 	"github.com/joho/godotenv"
 )
 
