@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	settings "../settings"
+	settings "github.com/wlanboy/privatesync/settings"
 )
 
 /*Settings containing everything*/
