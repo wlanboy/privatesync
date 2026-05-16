@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	app "./application"
+	app "github.com/wlanboy/privatesync/application"
 )
 
 func main() {
