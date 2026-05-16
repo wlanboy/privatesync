@@ -1,7 +1,7 @@
 package application
 
 import (
-	store "../store"
+	store "github.com/wlanboy/privatesync/store"
 )
 
 /*Sync process containing workplace and syncspace*/
