@@ -6,41 +6,59 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 )
 
-func crypt(sync *Sync) {
+func crypt(sync *Sync) error {
 	workdir := sync.Storage.Settings.WorkPath
 	syncdir := sync.Storage.Settings.SyncPath
-	secret := sync.Storage.Settings.Secret
 
-	items, _ := ioutil.ReadDir(workdir)
+	key, err := deriveKey(sync.Storage.PlainSecret, sync.Storage.Settings.Salt)
+	if err != nil {
+		return err
+	}
+
+	items, err := os.ReadDir(workdir)
+	if err != nil {
+		return err
+	}
 	for _, item := range items {
 		if item.IsDir() {
-			testpath := filepath.Join(syncdir, item.Name())
-			test, _ := os.Stat(testpath)
-			if test == nil {
-				os.Mkdir(testpath, os.ModePerm)
+			srcdir := filepath.Join(workdir, item.Name())
+			dstdir := filepath.Join(syncdir, item.Name())
+
+			if _, err := os.Stat(dstdir); os.IsNotExist(err) {
+				if err := os.Mkdir(dstdir, os.ModePerm); err != nil {
+					return err
+				}
 			}
-			subitems, _ := ioutil.ReadDir(item.Name())
+
+			subitems, err := os.ReadDir(srcdir)
+			if err != nil {
+				return err
+			}
 			for _, subitem := range subitems {
 				if !subitem.IsDir() {
-					oldpath := filepath.Join(workdir, item.Name())
-					newpath := filepath.Join(testpath, item.Name())
+					oldpath := filepath.Join(srcdir, subitem.Name())
+					newpath := filepath.Join(dstdir, subitem.Name())
 
-					cryptFile(oldpath, newFileName(newpath), secret)
+					if err := cryptFile(oldpath, newFileName(newpath), key); err != nil {
+						return err
+					}
 				}
 			}
 		} else {
 			oldpath := filepath.Join(workdir, item.Name())
 			newpath := filepath.Join(syncdir, item.Name())
 
-			cryptFile(oldpath, newFileName(newpath), secret)
+			if err := cryptFile(oldpath, newFileName(newpath), key); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func newFileName(oldfilename string) string {
@@ -49,28 +67,34 @@ func newFileName(oldfilename string) string {
 	return outfile
 }
 
-func cryptFile(infile string, outfile string, secret string) {
-	test, _ := os.Stat(outfile)
-	if test != nil {
-		os.Remove(outfile)
+func cryptFile(infile string, outfile string, key []byte) error {
+	data, err := os.ReadFile(infile)
+	if err != nil {
+		return err
 	}
-	f, _ := os.Create(outfile)
-	defer f.Close()
-	data, _ := ioutil.ReadFile(infile)
-	f.Write(encryptData(data, secret))
+	ciphertext, err := encryptData(data, key)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(outfile, ciphertext, 0640); err != nil {
+		return err
+	}
 	fmt.Println("*")
+	return nil
 }
 
-func encryptData(data []byte, secret string) []byte {
-	block, _ := aes.NewCipher([]byte(createHash(secret)))
+func encryptData(data []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		panic(err.Error())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
 	}
-	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-	return ciphertext
+	return gcm.Seal(nonce, nonce, data, nil), nil
 }

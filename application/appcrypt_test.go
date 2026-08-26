@@ -50,38 +50,47 @@ func TestNewOldFileNameRoundtrip(t *testing.T) {
 }
 
 func TestEncryptDecryptRoundtrip(t *testing.T) {
-	secret := "mysecretpassword"
+	key, _ := deriveKey("mysecretpassword", testSalt())
 	original := []byte("Hello, this is test data!")
 
-	encrypted := encryptData(original, secret)
+	encrypted, err := encryptData(original, key)
+	if err != nil {
+		t.Fatalf("encryptData returned error: %v", err)
+	}
 	if bytes.Equal(encrypted, original) {
 		t.Fatal("encrypted data should differ from original")
 	}
 
-	decrypted := decryptData(encrypted, secret)
+	decrypted, err := decryptData(encrypted, key)
+	if err != nil {
+		t.Fatalf("decryptData returned error: %v", err)
+	}
 	if !bytes.Equal(decrypted, original) {
 		t.Errorf("roundtrip failed: got %q, want %q", decrypted, original)
 	}
 }
 
 func TestEncryptDifferentSecretFails(t *testing.T) {
-	original := []byte("sensitive data")
-	encrypted := encryptData(original, "correctsecret")
+	correctKey, _ := deriveKey("correctsecret", testSalt())
+	wrongKey, _ := deriveKey("wrongsecret", testSalt())
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when decrypting with wrong secret")
-		}
-	}()
-	decryptData(encrypted, "wrongsecret")
+	original := []byte("sensitive data")
+	encrypted, err := encryptData(original, correctKey)
+	if err != nil {
+		t.Fatalf("encryptData returned error: %v", err)
+	}
+
+	if _, err := decryptData(encrypted, wrongKey); err == nil {
+		t.Error("expected error when decrypting with wrong key")
+	}
 }
 
 func TestEncryptProducesUniqueCiphertext(t *testing.T) {
+	key, _ := deriveKey("samesecret", testSalt())
 	data := []byte("same plaintext")
-	secret := "samesecret"
 
-	c1 := encryptData(data, secret)
-	c2 := encryptData(data, secret)
+	c1, _ := encryptData(data, key)
+	c2, _ := encryptData(data, key)
 	if bytes.Equal(c1, c2) {
 		t.Error("two encryptions of the same plaintext should differ (random nonce)")
 	}
