@@ -1,8 +1,6 @@
 package application
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"os"
 )
@@ -11,18 +9,26 @@ import (
 func (sync *Sync) RunCommands(args []string) {
 	if len(args) == 1 {
 		showHelp()
-	} else if len(args) == 2 {
-		object := args[1]
-		if "crypt" == object {
-			crypt(sync)
-		} else if "decrypt" == object {
-			decrypt(sync)
-		} else {
-			showHelp()
-		}
-	} else {
-		showHelp()
+		return
 	}
+	if len(args) == 2 {
+		var err error
+		switch args[1] {
+		case "crypt":
+			err = crypt(sync)
+		case "decrypt":
+			err = decrypt(sync)
+		default:
+			showHelp()
+			return
+		}
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	showHelp()
 }
 
 func showHelp() {
@@ -30,10 +36,4 @@ func showHelp() {
 	fmt.Println("verbs:")
 	fmt.Println("crypt (crypts files from work directory to sync directory)")
 	fmt.Println("decrypt (decrypts files from sync directory to work directory)")
-}
-
-func createHash(key string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(key))
-	return hex.EncodeToString(hasher.Sum(nil))
 }
