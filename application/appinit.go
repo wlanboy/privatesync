@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	store "github.com/wlanboy/privatesync/store"
 	"github.com/joho/godotenv"
+	store "github.com/wlanboy/privatesync/store"
 )
 
 /*Initialize configuration*/

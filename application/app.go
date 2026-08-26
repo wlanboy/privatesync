@@ -6,6 +6,6 @@ import (
 
 /*Sync process containing workplace and syncspace*/
 type Sync struct {
-	Storage  *store.Storage
+	Storage          *store.Storage
 	SettingsFilePath string
 }
