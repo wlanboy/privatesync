@@ -4,42 +4,59 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 )
 
-func decrypt(sync *Sync) {
+func decrypt(sync *Sync) error {
 	workdir := sync.Storage.Settings.WorkPath
 	syncdir := sync.Storage.Settings.SyncPath
-	secret := sync.Storage.Settings.Secret
 
-	items, _ := ioutil.ReadDir(syncdir)
+	key, err := deriveKey(sync.Storage.PlainSecret, sync.Storage.Settings.Salt)
+	if err != nil {
+		return err
+	}
+
+	items, err := os.ReadDir(syncdir)
+	if err != nil {
+		return err
+	}
 	for _, item := range items {
 		if item.IsDir() {
-			testpath := filepath.Join(workdir, item.Name())
-			test, _ := os.Stat(testpath)
-			if test == nil {
-				os.Mkdir(testpath, os.ModePerm)
+			srcdir := filepath.Join(syncdir, item.Name())
+			dstdir := filepath.Join(workdir, item.Name())
+
+			if _, err := os.Stat(dstdir); os.IsNotExist(err) {
+				if err := os.Mkdir(dstdir, os.ModePerm); err != nil {
+					return err
+				}
 			}
-			subitems, _ := ioutil.ReadDir(item.Name())
+
+			subitems, err := os.ReadDir(srcdir)
+			if err != nil {
+				return err
+			}
 			for _, subitem := range subitems {
 				if !subitem.IsDir() {
-					oldpath := filepath.Join(syncdir, item.Name())
-					newpath := filepath.Join(testpath, item.Name())
+					oldpath := filepath.Join(srcdir, subitem.Name())
+					newpath := filepath.Join(dstdir, subitem.Name())
 
-					decryptFile(oldpath, oldFileName(newpath), secret)
+					if err := decryptFile(oldpath, oldFileName(newpath), key); err != nil {
+						return err
+					}
 				}
 			}
 		} else {
-
 			oldpath := filepath.Join(syncdir, item.Name())
 			newpath := filepath.Join(workdir, item.Name())
 
-			decryptFile(oldpath, oldFileName(newpath), secret)
+			if err := decryptFile(oldpath, oldFileName(newpath), key); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func oldFileName(oldfilename string) string {
@@ -48,34 +65,32 @@ func oldFileName(oldfilename string) string {
 	return withoutCrypt[:len(withoutCrypt)-len(innerExt)-1] + innerExt
 }
 
-func decryptFile(infile string, outfile string, secret string) {
-	test, _ := os.Stat(outfile)
-	if test != nil {
-		os.Remove(outfile)
+func decryptFile(infile string, outfile string, key []byte) error {
+	data, err := os.ReadFile(infile)
+	if err != nil {
+		return err
 	}
-	f, _ := os.Create(outfile)
-	defer f.Close()
-
-	data, _ := ioutil.ReadFile(infile)
-	f.Write(decryptData(data, secret))
+	plaintext, err := decryptData(data, key)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(outfile, plaintext, 0640); err != nil {
+		return err
+	}
 	fmt.Println("*")
+	return nil
 }
 
-func decryptData(data []byte, secret string) []byte {
-	key := []byte(createHash(secret))
+func decryptData(data []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 	nonceSize := gcm.NonceSize()
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-	return plaintext
+	return gcm.Open(nil, nonce, ciphertext, nil)
 }
