@@ -1,69 +1,102 @@
 # privatesync
 
-Verschlüsselt Dateien aus einem Arbeitsverzeichnis in ein Sync-Verzeichnis (z.B. Dropbox, Nextcloud) und entschlüsselt sie zurück. Dateien werden mit AES-GCM verschlüsselt, der Schlüssel wird per bcrypt-Hash gesichert und in einer lokalen JSON-Datei gespeichert.
-
-## Zweck
-
-Sensible Dateien können so über unsichere Cloud-Sync-Dienste synchronisiert werden, ohne dass der Anbieter Zugriff auf den Klartext hat. Das Tool verschlüsselt alle Dateien aus dem Arbeitsverzeichnis und legt die verschlüsselten Kopien im Sync-Verzeichnis ab. Unterverzeichnisse werden dabei beibehalten.
+privatesync ist ein Kommandozeilen-Tool, das Dateien aus einem Arbeitsverzeichnis verschlüsselt in ein Sync-Verzeichnis kopiert (z. B. Dropbox oder Nextcloud) und sie von dort wieder entschlüsselt. Der Cloud-Anbieter sieht nur verschlüsselte Dateien. Die Verzeichnisstruktur bleibt erhalten, nur die Dateinamen bekommen die Endung `.crypt`.
 
 ```
-Arbeitsverzeichnis          Sync-Verzeichnis (z.B. Dropbox)
-├── dokument.pdf    →       ├── dokument..pdf.crypt
-├── notizen.txt     →       ├── notizen..txt.crypt
+Arbeitsverzeichnis          Sync-Verzeichnis (z. B. Dropbox)
+├── dokument.pdf    →       ├── dokument.pdf.crypt
+├── notizen.txt     →       ├── notizen.txt.crypt
 └── bilder/         →       └── bilder/
-    └── foto.jpg    →           └── foto..jpg.crypt
+    └── foto.jpg    →           └── foto.jpg.crypt
 ```
+
+## Funktionsweise
+
+- Aus dem Passwort und einem zufälligen Salt leitet das Tool per scrypt einen AES-256-Schlüssel ab.
+- Jede Datei wird in Blöcken von 64 KiB mit AES-256-GCM verschlüsselt. Ein Header am Dateianfang enthält Formatversion, Änderungszeit und Nonce-Präfix.
+- Der relative Pfad der Datei fließt in die Authentifizierung ein. Wer eine `.crypt`-Datei umbenennt, verschiebt oder einzelne Blöcke vertauscht, bekommt beim Entschlüsseln einen Fehler.
+- Unveränderte Dateien überspringt das Tool. Es vergleicht dafür Änderungszeit und Dateigröße.
+- Zieldateien schreibt das Tool erst in eine temporäre Datei und benennt sie danach um. Ein abgebrochener Lauf hinterlässt keine halb geschriebenen Dateien.
+- Arbeits- und Sync-Verzeichnis dürfen nicht identisch oder ineinander verschachtelt sein.
 
 ## Konfiguration
 
-Beim ersten Start wird eine Datei `syncsettings.json` im aktuellen Verzeichnis angelegt:
+Beim ersten Start fragt das Tool beide Verzeichnisse und das Passwort ab und legt die Einstellungen an. Standardort ist das Konfigurationsverzeichnis des Benutzers:
+
+| System  | Pfad                                                         |
+|---------|--------------------------------------------------------------|
+| Linux   | `~/.config/privatesync/syncsettings.json`                    |
+| macOS   | `~/Library/Application Support/privatesync/syncsettings.json` |
+| Windows | `%AppData%\privatesync\syncsettings.json`                    |
+
+Mit `--config <datei>` lässt sich ein anderer Pfad angeben.
 
 ```json
 {
  "WorkPath": "/home/user/dokumente",
  "SyncPath": "/home/user/Dropbox/encrypted",
- "Secret": "$2a$14$..."
+ "Secret": "$2a$14$...",
+ "Salt": "..."
 }
 ```
 
-| Feld       | Beschreibung                                              |
-|------------|-----------------------------------------------------------|
-| `WorkPath` | Verzeichnis mit den Originaldateien (Klartext)            |
-| `SyncPath` | Verzeichnis für die verschlüsselten Dateien (Cloud-Sync)  |
-| `Secret`   | bcrypt-Hash des eingegebenen Passworts (wird automatisch gesetzt) |
+| Feld       | Beschreibung                                                     |
+|------------|------------------------------------------------------------------|
+| `WorkPath` | Verzeichnis mit den Originaldateien (Klartext), `~` ist erlaubt  |
+| `SyncPath` | Verzeichnis für die verschlüsselten Dateien, `~` ist erlaubt     |
+| `Secret`   | bcrypt-Hash des Passworts, prüft die Eingabe beim Start          |
+| `Salt`     | Zufälliger Salt (Base64) für die Schlüsselableitung              |
 
-Alternativ kann eine `.env`-Datei im Arbeitsverzeichnis angelegt werden.
+Die Datei enthält nur den Hash, nicht das Passwort. Das Tool legt sie mit den Rechten `0600` an. Geht der Salt verloren, lassen sich die verschlüsselten Dateien nicht mehr entschlüsseln. Die Datei gehört deshalb ins Backup, aber nicht in das Sync-Verzeichnis.
 
-## Bauen
-
-Voraussetzung: Go 1.26+
-
-```bash
-# Abhängigkeiten laden
-go mod download
-
-# Binaries für Linux und Windows bauen
-./build.sh
-
-# Oder direkt ausführen
-go run main.go crypt
-```
-
-Die Build-Ausgaben sind:
-- `privatesync-linux-amd64`
-- `privatesync-windows-amd64.exe`
+Liegt eine `syncsettings.json` aus einer älteren Version im aktuellen Verzeichnis und am Standardort noch keine, verwendet das Tool die alte Datei und gibt einen Hinweis aus. Diese Datei sollte an den Standardort verschoben werden.
 
 ## Verwendung
 
 ```bash
 # Dateien verschlüsseln (WorkPath → SyncPath)
-./privatesync-linux-amd64 crypt
+privatesync crypt
+
+# Zusätzlich .crypt-Dateien löschen, deren Quelldatei nicht mehr existiert
+privatesync crypt --prune
 
 # Dateien entschlüsseln (SyncPath → WorkPath)
-./privatesync-linux-amd64 decrypt
+privatesync decrypt
+
+# Auch lokale Dateien überschreiben, die neuer sind als die verschlüsselte Kopie
+privatesync decrypt --force
+
+# Andere Einstellungsdatei verwenden
+privatesync crypt --config ~/privatesync-arbeit.json
 ```
 
-Bei jedem Aufruf wird das Passwort interaktiv abgefragt und gegen den gespeicherten bcrypt-Hash geprüft.
+Bei jedem Aufruf fragt das Tool das Passwort ab und prüft es gegen den gespeicherten Hash. Im Terminal erscheint die Eingabe nicht auf dem Bildschirm.
+
+Ohne `--force` überschreibt `decrypt` keine lokale Datei, die neuer ist als die verschlüsselte Kopie. Solche Dateien meldet das Tool als übersprungen. `--prune` läuft nur, wenn beim Verschlüsseln kein Fehler aufgetreten ist.
+
+Am Ende gibt das Tool eine Zusammenfassung aus, z. B. `crypt: 3 written, 120 unchanged`. Der Exit-Code ist `0` bei Erfolg, `1` bei Fehlern (auch wenn einzelne Dateien fehlgeschlagen sind) und `2` bei falschen Argumenten.
+
+## Bauen
+
+Voraussetzung: Go 1.27+
+
+```bash
+# Abhängigkeiten laden
+go mod download
+
+# Binaries für alle Zielplattformen bauen
+./build.sh
+
+# Oder direkt ausführen
+go run . crypt
+```
+
+`build.sh` erzeugt statisch gelinkte Binaries:
+
+- `privatesync-linux-amd64`
+- `privatesync-linux-arm64`
+- `privatesync-darwin-arm64`
+- `privatesync-windows-amd64.exe`
 
 ## Tests
 
@@ -88,9 +121,9 @@ go build ./...
 go test ./...
 ```
 
-Aktuelle Abhängigkeiten (`go.mod`):
+Verwendete Pakete:
 
-| Paket | Verwendung |
-|-------|------------|
-| `github.com/joho/godotenv` | `.env`-Dateien laden |
-| `golang.org/x/crypto` | bcrypt-Passwort-Hashing |
+| Paket                 | Verwendung                                                      |
+|-----------------------|-----------------------------------------------------------------|
+| `golang.org/x/crypto` | bcrypt für den Passwort-Hash, scrypt für die Schlüsselableitung |
+| `golang.org/x/term`   | Passworteingabe ohne Anzeige im Terminal                        |
