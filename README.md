@@ -76,6 +76,12 @@ Ohne `--force` überschreibt `decrypt` keine lokale Datei, die neuer ist als die
 
 Am Ende gibt das Tool eine Zusammenfassung aus, z. B. `crypt: 3 written, 120 unchanged`. Der Exit-Code ist `0` bei Erfolg, `1` bei Fehlern (auch wenn einzelne Dateien fehlgeschlagen sind) und `2` bei falschen Argumenten.
 
+## Grenzen
+
+- Im Sync-Verzeichnis sind Dateinamen, Verzeichnisstruktur und ungefähre Dateigrößen im Klartext lesbar. Das Tool verschlüsselt nur den Inhalt.
+- Das Tool merkt sich keinen Sync-Zustand. Wurde eine Datei lokal und auf einem anderen Rechner geändert, entscheidet nur die Änderungszeit: Ist die lokale Datei älter, überschreibt `decrypt` sie.
+- `crypt --prune` löscht jede `.crypt`-Datei ohne lokale Quelldatei, auch wenn ein anderer Rechner sie gerade erst hochgeladen hat. Auf einem Rechner, der noch nicht entschlüsselt hat, sollte deshalb zuerst `decrypt` laufen.
+
 ## Bauen
 
 Voraussetzung: Go 1.27+
